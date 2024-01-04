@@ -1,6 +1,11 @@
-{ pkgs ? import <nixpkgs> { } }:
-let main = import ./default.nix { inherit pkgs; };
-in with pkgs;
+let sources = import ./nix/sources.nix;
+in { pkgs ? import sources.nixpkgs { } }:
+
+with pkgs;
+
+let
+  main = import ./default.nix { inherit pkgs; };
+in
 mkShell {
   buildInputs = main.buildInputs ++ main.nativeBuildInputs ++ [
     cargo-edit
