@@ -1,7 +1,10 @@
-{ pkgs ? import <nixpkgs> { } }:
+let sources = import ./nix/sources.nix;
+in { pkgs ? import sources.nixpkgs { } }:
+
+with pkgs;
+
 let main = import ./default.nix { inherit pkgs; };
-in with pkgs;
-mkShell {
+in mkShell {
   buildInputs = main.buildInputs ++ main.nativeBuildInputs ++ [
     cargo-edit
     clippy
@@ -15,7 +18,7 @@ mkShell {
     git
     openssh
   ];
-  inherit (main) BLAKE3_CSRC;
+  inherit (main) ESSENTIALS BASH NIX_BIN IN_NIX BLAKE3_CSRC;
   CNS_IN_NIX_SHELL = "1";
   RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
 }

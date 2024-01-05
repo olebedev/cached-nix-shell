@@ -3,28 +3,43 @@ use std::path::Path;
 use std::process::Command;
 
 fn main() {
+    // Necessary env var to substitute in the final artifact depends on, regardless of the
+    // build context; either in nix-shell or a basic nix build.
+
+    // We need to support non-nix environment anyways, ecpesially for VSCode and rust-analyser that 
+    // is being run by a VSCode extension and it doesn't have access to nix-shell to do a proper build.
+    if var("IN_NIX").is_err() || var("IN_NIX").unwrap() != "1" {
+        println!("cargo:rustc-env=CNS_ESSENTIALS=/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin:/opt/homebrew/bin:/opt/homebrew/sbin");
+        println!("cargo:rustc-env=CNS_BASH=bash");
+        println!("cargo:rustc-env=CNS_NIX=");
+    } else {
+        println!(
+            "cargo:rustc-env=CNS_ESSENTIALS={}",
+            var("ESSENTIALS")
+                .expect("Expect to the ESSENTIALS env var to be set.")
+        );
+        println!(
+            "cargo:rustc-env=CNS_BASH={}",
+            var("BASH").expect("Expect to the BASH env var to be set.")
+        );
+        println!(
+            "cargo:rustc-env=CNS_NIX={}/",
+            var("NIX_BIN").expect("Expect to the NIX_BIN env var to be set.")
+        );
+    }
+
     if var_os("CNS_IN_NIX_SHELL").is_none() {
         // Release build triggered by nix-build. Use paths relative to $out.
         let out = var("out").unwrap();
         println!("cargo:rustc-env=CNS_TRACE_NIX_SO={out}/lib/trace-nix.so");
         println!("cargo:rustc-env=CNS_VAR_EMPTY={out}/var/empty");
         println!(
+            // This file is moved to /share/cached-nix-shell in the ./nix/Makefile#post-install
             "cargo:rustc-env=CNS_RCFILE={out}/share/cached-nix-shell/rcfile.sh"
         );
         println!(
+            // This directory is created in the ./nix/Makefile#post-install
             "cargo:rustc-env=CNS_WRAP_PATH={out}/libexec/cached-nix-shell"
-        );
-
-        // Use pinned nix and nix-shell binaries.
-        println!(
-            "cargo:rustc-env=CNS_NIX={}/",
-            which::which("nix")
-                .expect("command not found: nix")
-                .parent()
-                .unwrap()
-                .as_os_str()
-                .to_str()
-                .unwrap()
         );
     } else {
         // Developer build triggered by `nix-shell --run 'cargo build'`.
@@ -59,8 +74,5 @@ fn main() {
         )
         .unwrap();
         println!("cargo:rustc-env=CNS_WRAP_PATH={out_dir}/wrapper");
-
-        // Use nix and nix-shell from $PATH at runtime.
-        println!("cargo:rustc-env=CNS_NIX=");
     }
 }

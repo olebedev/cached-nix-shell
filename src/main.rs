@@ -2,10 +2,12 @@ use crate::args::Args;
 use crate::bash::is_literal_bash_string;
 use crate::path_clean::PathClean;
 use crate::trace::Trace;
-use itertools::{chain, Itertools};
+use env_logger::{Builder, Env};
+use itertools::chain;
+use log::{debug, error, info, warn};
 use nix::unistd::{access, AccessFlags};
 use once_cell::sync::Lazy;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::env::current_dir;
 use std::ffi::{OsStr, OsString};
 use std::fs::{read, read_link, File};
@@ -19,8 +21,6 @@ use std::process::{exit, Command, Stdio};
 use std::time::Instant;
 use tempfile::NamedTempFile;
 use ufcs::Pipe;
-use log::{debug, error, warn,  info};
-use env_logger::{Builder, Env};
 
 mod args;
 mod bash;
@@ -109,50 +109,6 @@ struct NixShellOutput {
     drv: String,
 }
 
-fn minimal_essential_path() -> OsString {
-    let required_binaries = ["tar", "gzip", "git", "nix-shell", "rm"];
-
-    fn which_dir(binary: &&str) -> Option<PathBuf> {
-        std::env::var_os("PATH")
-            .as_ref()
-            .unwrap()
-            .pipe(std::env::split_paths)
-            .find(|dir| {
-                if access(&dir.join(binary), AccessFlags::X_OK).is_err() {
-                    return false;
-                }
-
-                if binary == &"nix-shell" {
-                    // Ignore our fake nix-shell.
-                    return !dir
-                        .join(binary)
-                        .canonicalize()
-                        .ok()
-                        .and_then(|x| x.file_name().map(|x| x.to_os_string()))
-                        .map(|x| x == "cached-nix-shell")
-                        .unwrap_or(true);
-                }
-
-                true
-            })
-    }
-
-    let required_paths = required_binaries
-        .iter()
-        .filter_map(which_dir)
-        .collect::<HashSet<PathBuf>>();
-
-    // We can't just join_paths(required_paths) -- we need to preserve order
-    std::env::var_os("PATH")
-        .as_ref()
-        .unwrap()
-        .pipe(std::env::split_paths)
-        .filter(|path_item| required_paths.contains(path_item))
-        .unique()
-        .pipe(std::env::join_paths)
-        .unwrap()
-}
-
 fn absolute_dirname(script_fname: &OsStr) -> PathBuf {
     Path::new(&script_fname)
         .parent()
@@ -209,13 +165,15 @@ fn args_to_inp(pwd: PathBuf, x: &Args) -> NixShellInput {
                 args.push(var.clone());
             }
         }
-        clean_env.insert(OsString::from("PATH"), minimal_essential_path());
+        clean_env.insert(OsString::from("PATH"), env!("CNS_ESSENTIALS").into());
         clean_env
     };
 
     args.extend(x.other_kw.clone());
     args.push(OsString::from("--"));
     args.extend(x.rest.clone());
+
+    debug!("env: {:?}", &env);
 
     NixShellInput {
         pwd,
@@ -287,30 +245,17 @@ fn run_nix_shell(inp: &NixShellInput) -> NixShellOutput {
     std::mem::drop(trace_file);
 
     let drv: String = {
-        // nix 2.3
-        let mut exec = Command::new(concat!(env!("CNS_NIX"), "nix"))
+        // nix 2.4
+        let exec = Command::new(concat!(env!("CNS_NIX"), "nix"))
             .arg("show-derivation")
+            .arg("--extra-experimental-features")
+            .arg("nix-command")
             .arg(env_out)
             .output()
             .expect("failed to execute nix show-derivation");
-        let mut stderr = exec.stderr.clone();
         if !exec.status.success() {
-            // nix 2.4
-            exec = Command::new(concat!(env!("CNS_NIX"), "nix"))
-                .arg("show-derivation")
-                .arg("--extra-experimental-features")
-                .arg("nix-command")
-                .arg(env_out)
-                .output()
-                .expect("failed to execute nix show-derivation");
-            stderr.extend(b"\n");
-            stderr.extend(exec.stderr);
-        }
-        if !exec.status.success() {
-            error!(
-                "failed to execute nix show-derivation"
-            );
-            let _ = std::io::stderr().write_all(&stderr);
+            error!("failed to execute nix show-derivation");
+            let _ = std::io::stderr().write_all(&exec.stderr);
             exit(1);
         }
 
@@ -350,7 +295,7 @@ fn run_script(
         exec_string.push("exec ");
         exec_string.push(nix_shell_args.interpreter);
         exec_string.push(r#" "$@""#);
-        Command::new("bash")
+        Command::new(env!("CNS_BASH"))
             .arg("-c")
             .arg(exec_string)
             .arg("cached-nix-shell-bash") // corresponds to "$0" inside '-i'
@@ -428,12 +373,12 @@ fn run_from_args(args: Vec<OsString>) {
         args::RunMode::InteractiveShell => {
             let mut args = vec!["--rcfile".into(), env!("CNS_RCFILE").into()];
             args.append(build_bash_options(&env).as_mut());
-            ("bash".into(), args)
+            (env!("CNS_BASH").into(), args)
         }
         args::RunMode::Shell(cmd) => {
             let mut args = build_bash_options(&env);
             args.extend_from_slice(&["-c".into(), cmd]);
-            ("bash".into(), args)
+            (env!("CNS_BASH").into(), args)
         }
         args::RunMode::Exec(cmd, cmd_args) => (cmd, cmd_args),
     };
@@ -636,7 +581,7 @@ fn wrap(cmd: Vec<OsString>) {
         .args(&cmd[1..])
         .env("PATH", OsStr::from_bytes(&new_path))
         .exec();
-    error!("couldn't run: {exec}");
+    error!("couldn't execute: {exec}");
     exit(1);
 }
 
