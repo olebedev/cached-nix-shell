@@ -422,6 +422,16 @@ fn cached_shell_env(pure: bool, inp: &NixShellInput) -> EnvOptions {
     let bashopts = env.remove(OsStr::new("BASHOPTS")).unwrap_or_default();
     env.insert(OsString::from("IN_CACHED_NIX_SHELL"), OsString::from("1"));
 
+    // Disable bash session history. See https://superuser.com/a/1400695 for details.
+    // Also, see /etc/bashrc_Apple_Terminal, to look at the script that does lookups for the
+    // SHELL_SESSION_DID_INIT env var.
+    if std::env::var("CNS_DONT_SET_SHELL_SESSION_DID_INIT").is_err() {
+        env.insert(
+            OsString::from("SHELL_SESSION_DID_INIT"),
+            OsString::from("1"),
+        );
+    }
+
     EnvOptions {
         env: merge_env(if pure { env } else { merge_impure_env(env) }),
         shellopts,
