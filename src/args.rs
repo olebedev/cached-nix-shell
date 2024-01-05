@@ -10,6 +10,7 @@
 //! compatible way, so it is appropriate to code this explicitly rather than use
 //! such libraries.
 
+use log::info;
 use std::collections::VecDeque;
 use std::ffi::{OsStr, OsString};
 use std::io::Write;
@@ -17,7 +18,6 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
 use std::process::{exit, Command};
 use ufcs::Pipe;
-use log::info;
 
 pub enum RunMode {
     /// no arg
@@ -97,7 +97,7 @@ impl Args {
             packages_or_expr: false,
             pure: false,
             include_nix_path: Vec::new(),
-            interpreter: OsString::from("bash"),
+            interpreter: env!("CNS_BASH").into(),
             run: RunMode::InteractiveShell,
             keep: Vec::new(),
             rest: Vec::new(),
@@ -204,11 +204,6 @@ fn exit_version() {
             .map(|x| format!("-{x}"))
             .unwrap_or("".into())
     );
-    if env!("CNS_NIX").is_empty() {
-        info!("Using nix-shell from $PATH");
-    } else {
-        info!("Using {}nix-shell", env!("CNS_NIX"));
-    }
     std::io::stdout().flush().unwrap();
     Command::new(concat!(env!("CNS_NIX"), "nix-shell"))
         .arg("--version")
