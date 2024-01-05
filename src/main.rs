@@ -3,7 +3,7 @@ use crate::bash::is_literal_bash_string;
 use crate::path_clean::PathClean;
 use crate::trace::Trace;
 use env_logger::{Builder, Env};
-use itertools::{chain, Itertools};
+use itertools::chain;
 use log::{debug, error, info, warn};
 use nix::unistd::{access, AccessFlags};
 use once_cell::sync::Lazy;
@@ -245,28 +245,17 @@ fn run_nix_shell(inp: &NixShellInput) -> NixShellOutput {
     std::mem::drop(trace_file);
 
     let drv: String = {
-        // nix 2.3
-        let mut exec = Command::new(concat!(env!("CNS_NIX"), "nix"))
+        // nix 2.4
+        let exec = Command::new(concat!(env!("CNS_NIX"), "nix"))
             .arg("show-derivation")
+            .arg("--extra-experimental-features")
+            .arg("nix-command")
             .arg(env_out)
             .output()
             .expect("failed to execute nix show-derivation");
-        let mut stderr = exec.stderr.clone();
-        if !exec.status.success() {
-            // nix 2.4
-            exec = Command::new(concat!(env!("CNS_NIX"), "nix"))
-                .arg("show-derivation")
-                .arg("--extra-experimental-features")
-                .arg("nix-command")
-                .arg(env_out)
-                .output()
-                .expect("failed to execute nix show-derivation");
-            stderr.extend(b"\n");
-            stderr.extend(exec.stderr);
-        }
         if !exec.status.success() {
             error!("failed to execute nix show-derivation");
-            let _ = std::io::stderr().write_all(&stderr);
+            let _ = std::io::stderr().write_all(&exec.stderr);
             exit(1);
         }
 
