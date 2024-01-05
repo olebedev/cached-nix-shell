@@ -6,7 +6,7 @@ fn main() {
     // Necessary env var to substitute in the final artifact depends on, regardless of the
     // build context; either in nix-shell or a basic nix build.
 
-    // We need to support non-nix environment anyways, ecpesially for VSCode and rust-analyser that 
+    // We need to support non-nix environment anyways, especially for VSCode and rust-analyser that
     // is being run by a VSCode extension and it doesn't have access to nix-shell to do a proper build.
     if var("IN_NIX").is_err() || var("IN_NIX").unwrap() != "1" {
         println!("cargo:rustc-env=CNS_ESSENTIALS=/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin:/opt/homebrew/bin:/opt/homebrew/sbin");
