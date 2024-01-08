@@ -4,7 +4,7 @@ use crate::path_clean::PathClean;
 use crate::trace::Trace;
 use env_logger::{Builder, Env, Target};
 use itertools::chain;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use nix::unistd::{access, AccessFlags};
 use once_cell::sync::Lazy;
 use std::collections::BTreeMap;
@@ -172,8 +172,6 @@ fn args_to_inp(pwd: PathBuf, x: &Args) -> NixShellInput {
     args.extend(x.other_kw.clone());
     args.push(OsString::from("--"));
     args.extend(x.rest.clone());
-
-    debug!("env: {:?}", &env);
 
     NixShellInput {
         pwd,
