@@ -204,6 +204,7 @@ fn exit_version() {
             .map(|x| format!("-{x}"))
             .unwrap_or("".into())
     );
+    info!("nix-shell {}", concat!(env!("CNS_NIX"), "nix-shell"));
     std::io::stdout().flush().unwrap();
     Command::new(concat!(env!("CNS_NIX"), "nix-shell"))
         .arg("--version")
