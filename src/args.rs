@@ -155,6 +155,8 @@ impl Args {
                 exit_version();
             } else if arg == "--wrap" && !in_shebang {
                 return Err("--wrap should be the first argument".to_string());
+            } else if arg == "--help" {
+                exit_help();
             } else if arg.as_bytes().first() == Some(&b'-') {
                 return Err(format!("unexpected arg {arg:?}"));
             } else {
@@ -208,6 +210,13 @@ fn exit_version() {
     std::io::stdout().flush().unwrap();
     Command::new(concat!(env!("CNS_NIX"), "nix-shell"))
         .arg("--version")
+        .exec();
+    exit(1);
+}
+
+fn exit_help() {
+    Command::new(concat!(env!("CNS_NIX"), "nix-shell"))
+        .arg("--help")
         .exec();
     exit(1);
 }
