@@ -194,6 +194,9 @@ fn args_to_inp(pwd: PathBuf, x: &Args) -> NixShellInput {
             "ftp_proxy",
             "all_proxy",
             "no_proxy",
+            // We want to pass SHELL by default
+            // https://canva.sourcegraphcloud.com/search?q=context:global+ORIGINAL_USER_SHELL&patternType=keyword&sm=0
+            "SHELL",
         ];
         for var in whitelist {
             if let Some(val) = std::env::var_os(var) {
@@ -336,9 +339,21 @@ fn run_script(
     let exec = if is_literal_bash_string(nix_shell_args.interpreter.as_bytes())
     {
         // eprintln!("Interpreter is a literal string, executing directly");
-        Command::new(nix_shell_args.interpreter)
-            .arg(fname)
-            .args(script_args)
+        // following https://github.com/NixOS/nix/commit/437189e446e16399d347e4430c4d115b4cf2ddf1
+        let mut exec_string = OsString::new();
+        exec_string.push("source ");
+        exec_string.push(env!("CNS_RCFILE"));
+        exec_string.push("; exec ");
+        exec_string.push(nix_shell_args.interpreter);
+        exec_string.push(" ");
+        exec_string.push(fname);
+        exec_string.push(" ");
+        exec_string.push(script_args.join(&OsStr::new(" ")));
+        // eprintln!("{:?}", exec_string);
+
+        Command::new("bash")
+            .arg("-c")
+            .arg(exec_string)
             .env_clear()
             .envs(&env.env)
             .exec()
